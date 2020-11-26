@@ -1,96 +1,139 @@
+#include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 
-#include "utils.h"
 #include "stzbuf.h"
+#include "util.h"
 
-Stz *Stz_new(void)
+Stzbuf *Sb_New(void)
 {
-	return Calloc(1, sizeof(Stz));
+	// TODO
+	Stzbuf *sb = Calloc(1, sizeof(Stzbuf));
+
+	return sb;
 }
 
-void Stz_free(Stz *stz)
+void Sb_Free(Stzbuf *sb)
 {
-	assert(stz);
-	Free(stz);
+	// TODO
+	assert(sb);
+
+	if (sb->buf) {
+		assert(sb->size > 0);
+		Free(sb->buf);
+	}
+
+	Free(sb);
 }
 
-#define MINSTZBUFSIZE 100
-
-void Stz_resize(Stz *stz, int newsize)
+void Sb_Grow(Stzbuf *sb)
 {
-	assert(stz);
+	assert(sb);
+	Sb_Resize(sb, sb->size * 3 / 2);
+}
 
+void Sb_Resize(Stzbuf *sb, int newsize)
+{
 	char *newbuf;
+
+	assert(sb);
+	assert(newsize >= 0);
 
 	if (newsize < MINSTZBUFSIZE) {
 		newsize = MINSTZBUFSIZE;
 	}
 
 	if ((newbuf = Calloc(newsize, sizeof(char))) == NULL) {
-		fatal("Stz_resize", "no memory");
+		Fatal("Sb_Resize", "no memory");
 	}
 
-	if (stz->size) {
-		assert(stz->buf);
-		memcpy(newbuf, stz->buf, stz->full * sizeof(char));
-		Free(stz->buf);
-
-		assert(stz->full < newsize);
-		stz->buf[stz->full] = '\0';
+	if (sb->buf) {
+		assert(sb->size > 0);
+		memcpy(newbuf, sb->buf, sb->full * sizeof(char));
+		Free(sb->buf);
 	}
 
-	stz->buf = newbuf;
-	stz->size = newsize;
+	sb->buf = newbuf;
+	sb->size = newsize;
 }
 
-void Stz_add(Stz *stz, char ch)
+void Sb_Cat(Stzbuf *sb, Stzbuf *src)
 {
-	assert(stz);
+	assert(sb);
+	assert(src);
 
-	if (stz->full + 1 > stz->size) {
-		Stz_resize(stz, stz->size * 3 / 2);
+	if (sb->full + src->full >= sb->size) {
+		Sb_Resize(sb, (sb->full + src->full) * 3 / 2);
 	}
 
-	stz->buf[stz->full++] = ch;
-	assert(stz->full < stz->size);
-	stz->buf[stz->full] = '\0';
+	memcpy(sb->buf + sb->full, src->buf, src->full * sizeof(char));
+	sb->full += src->full;
 }
 
-void Stz_cpy(Stz *stz, char *buf)
+void Sb_Cpy(Stzbuf *sb, Stzbuf *src)
 {
-	assert(stz);
-	assert(buf);
+	assert(sb);
+	assert(src);
 
+	if (src->full >= sb->size) {
+		Sb_Resize(sb, src->full * 3 / 2);
+	}
+
+	memcpy(sb->buf, src->buf, src->full * sizeof(char));
+	sb->full = src->full;
+}
+
+void Sb_AddStz(Stzbuf *sb, char *src)
+{
 	int len;
 
-	len = strlen(buf);
+	assert(sb);
+	assert(src);
 
-	if (len + 1 >= stz->size) {
-		Stz_resize(stz, (len + 1) * 3 / 2);
-	}
+	len = strlen(src);
 
-	strcpy(stz->buf, buf);
-	stz->full = len;
+	if (sb->full + len >= sb->size) {
+        Sb_Resize(sb, (sb->full + len) * 3 / 2);
+    }
+
+    memcpy(sb->buf + sb->full, src, len * sizeof(char));
+    sb->full += len;
 }
 
-void Stz_cat(Stz *stz, char *buf)
+/*
+TODO:
+1.  Consider whether adding \0 should be treated specially.
+    If the buffer is binary adding \0 should increase the length,
+    if the buffer is a terminated string, adding \0 should not increase the length.
+*/
+void Sb_AddCh(Stzbuf *sb, char ch)
 {
-	assert(stz);
-	assert(buf);
+	assert(sb);
 
-	int len;
-
-	len = strlen(buf);
-
-	if (stz->full + len + 1 >= stz->size) {
-		Stz_resize(stz, (stz->full + len + 1) * 3 / 2);
+	if (sb->full >= sb->size) {
+		Sb_Resize(sb, sb->size * 3 / 2);
 	}
 
-	// buffer is always terminated
-	assert(stz->buf[stz->full] == '\0');
-	strcat(stz->buf + stz->full, buf);
-	stz->full += len;
-	assert(stz->full + 1 < stz->size);
-	stz->buf[stz->full] = '\0';
+	assert(sb->full < sb->size);
+	sb->buf[sb->full++] = ch;
 }
+
+/*
+Return a terminated string, not just the buffer.
+*/
+char *Sb_Stz(Stzbuf *sb)
+{
+	assert(sb);
+
+	if (sb->full >= sb->size) {
+		Sb_Resize(sb, sb->size * 3 / 2);
+	}
+
+	assert(sb->full < sb->size);
+	sb->buf[sb->full] = '\0';
+
+	return sb->buf;
+}
+
+
+
